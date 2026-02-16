@@ -29,29 +29,25 @@ import (
 
 	"github.com/onsi/ginkgo/v2"
 	v1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apiextensionsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
 // Constants for common values
 const (
-	CommonName                         = "csi-snapshot-metadata"
-	TLSSecretName                      = "csi-snapshot-metadata-server-certs"
-	ServicePort                        = 6443
-	TargetPort                         = 50051
-	CertificateValidityDays            = 365
-	ServerCertificateValidity          = 60
-	CertificateKeySize                 = 4096
-	AppSelectorKey                     = "app.kubernetes.io/name"
-	AppSelectorValue                   = "csi-hostpathplugin"
-	SnapshotMetadataCRAudience         = "csi-snapshot-metadata-test"
-	SnapshotMetadataServiceCRDManifest = "test/e2e/testing-manifests/storage-csi/external-snapshot-metadata/cbt.storage.k8s.io_snapshotmetadataservices.yaml"
+	CommonName                = "csi-snapshot-metadata"
+	TLSSecretName             = "csi-snapshot-metadata-server-certs"
+	ServicePort               = 6443
+	TargetPort                = 50051
+	CertificateValidityDays   = 365
+	ServerCertificateValidity = 60
+	CertificateKeySize        = 4096
+	AppSelectorKey            = "app.kubernetes.io/name"
+	AppSelectorValue          = "csi-hostpathplugin"
+	SnapshotMetadataCRAudience = "csi-snapshot-metadata-test"
 
 	// SnapshotMetadataService API constants
 	SnapshotMetadataServiceGroup      = "cbt.storage.k8s.io"
@@ -188,84 +184,8 @@ func createSnapshotMetadataSVC(ctx context.Context, f *framework.Framework, driv
 	return nil
 }
 
-// crdExistsInDiscovery checks to see if the given CRD exists in discovery at all served versions.
-func crdExistsInDiscovery(client apiextensionsclientset.Interface, crd *apiextensionsv1.CustomResourceDefinition) bool {
-	var versions []string
-	for _, v := range crd.Spec.Versions {
-		if v.Served {
-			versions = append(versions, v.Name)
-		}
-	}
-	for _, v := range versions {
-		if !crdVersionExistsInDiscovery(client, crd, v) {
-			return false
-		}
-	}
-	return true
-}
-
-func crdVersionExistsInDiscovery(client apiextensionsclientset.Interface, crd *apiextensionsv1.CustomResourceDefinition, version string) bool {
-	resourceList, err := client.Discovery().ServerResourcesForGroupVersion(crd.Spec.Group + "/" + version)
-	if err != nil {
-		return false
-	}
-	for _, resource := range resourceList.APIResources {
-		if resource.Name == crd.Spec.Names.Plural {
-			return true
-		}
-	}
-	return false
-}
-
-// createSnapshotMetadataServiceCRD creates the SnapshotMetadataService CRD from the manifest if it doesn't already exist.
-func createSnapshotMetadataServiceCRD(ctx context.Context, f *framework.Framework) error {
-	ginkgo.By("Creating SnapshotMetadataService CRD if not present")
-
-	// Load CRD from manifest
-	items, err := LoadFromManifests(SnapshotMetadataServiceCRDManifest)
-	if err != nil {
-		return fmt.Errorf("failed to load SnapshotMetadataService CRD manifest: %w", err)
-	}
-
-	if len(items) == 0 {
-		return fmt.Errorf("no items found in SnapshotMetadataService CRD manifest")
-	}
-
-	crd, ok := items[0].(*apiextensionsv1.CustomResourceDefinition)
-	if !ok {
-		return fmt.Errorf("expected CustomResourceDefinition, got %T", items[0])
-	}
-
-	// Create apiextensions client
-	apiextClient, err := apiextensionsclientset.NewForConfig(f.ClientConfig())
-	if err != nil {
-		return fmt.Errorf("failed to create apiextensions client: %w", err)
-	}
-
-	// Check if CRD already exists in discovery
-	if crdExistsInDiscovery(apiextClient, crd) {
-		framework.Logf("SnapshotMetadataService CRD already exists, skipping creation")
-		return nil
-	}
-
-	// Create the CRD
-	if _, err := apiextClient.ApiextensionsV1().CustomResourceDefinitions().Create(ctx, crd, metav1.CreateOptions{}); err != nil {
-		return fmt.Errorf("failed to create SnapshotMetadataService CRD: %w", err)
-	}
-
-	// Wait for CRD to appear in discovery
-	if err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, wait.ForeverTestTimeout, true, func(ctx context.Context) (bool, error) {
-		return crdExistsInDiscovery(apiextClient, crd), nil
-	}); err != nil {
-		return fmt.Errorf("failed to see SnapshotMetadataService CRD in discovery: %w", err)
-	}
-
-	framework.Logf("SnapshotMetadataService CRD created successfully: %s", crd.Name)
-	return nil
-}
-
-// createSnapshotMetdataServiceCR creates a SnapshotMetadataService custom resource.
-func createSnapshotMetdataServiceCR(ctx context.Context, f *framework.Framework, driverName, driverNamespace string, caCert *x509.Certificate) error {
+// createSnapshotMetadataServiceCR creates a SnapshotMetadataService custom resource.
+func createSnapshotMetadataServiceCR(ctx context.Context, f *framework.Framework, driverName, driverNamespace string, caCert *x509.Certificate) error {
 	ginkgo.By("Creating snapshot metadata service CR")
 
 	sms := &unstructured.Unstructured{
@@ -296,34 +216,43 @@ func createSnapshotMetdataServiceCR(ctx context.Context, f *framework.Framework,
 	return nil
 }
 
-// CreateSnapshotMetadataResources sets up the snapshot metadata resources.
-func CreateSnapshotMetadataResources(ctx context.Context, f *framework.Framework, driverName, driverNamespace string) error {
+// CreateSnapshotMetadataResources sets up the snapshot metadata resources
+// and returns a cleanup function for the cluster-scoped SnapshotMetadataService CR.
+func CreateSnapshotMetadataResources(ctx context.Context, f *framework.Framework, driverName, driverNamespace string) (func(ctx context.Context), error) {
 	caCert, caPrivateKey, err := generateCA()
 	if err != nil {
-		return fmt.Errorf("failed to generate CA certificate: %w", err)
+		return nil, fmt.Errorf("failed to generate CA certificate: %w", err)
 	}
 
 	serverCertBytes, serverKeyBytes, err := generateServerCert(driverNamespace, caCert, caPrivateKey)
 	if err != nil {
-		return fmt.Errorf("failed to generate server certificate: %w", err)
+		return nil, fmt.Errorf("failed to generate server certificate: %w", err)
 	}
 
 	if err := createTLSSecret(ctx, f, driverNamespace, serverCertBytes, serverKeyBytes); err != nil {
-		return fmt.Errorf("failed to create TLS secret: %w", err)
+		return nil, fmt.Errorf("failed to create TLS secret: %w", err)
 	}
 
 	if err := createSnapshotMetadataSVC(ctx, f, driverName, driverNamespace); err != nil {
-		return fmt.Errorf("failed to create snapshot metadata svc: %w", err)
+		return nil, fmt.Errorf("failed to create snapshot metadata svc: %w", err)
 	}
 
-	// Create SnapshotMetadataService CRD, if not already present
-	if err := createSnapshotMetadataServiceCRD(ctx, f); err != nil {
-		return fmt.Errorf("failed to create SnapshotMetadataService CRD: %w", err)
+	if err := createSnapshotMetadataServiceCR(ctx, f, driverName, driverNamespace, caCert); err != nil {
+		return nil, fmt.Errorf("failed to create SnapshotMetadataService CR: %w", err)
 	}
 
-	if err := createSnapshotMetdataServiceCR(ctx, f, driverName, driverNamespace, caCert); err != nil {
-		return fmt.Errorf("failed to create SnapshotMetadataService CR: %w", err)
+	crName := fmt.Sprintf("%s-%s", driverName, f.UniqueName)
+	cleanup := func(ctx context.Context) {
+		gvr := schema.GroupVersionResource{
+			Group:    SnapshotMetadataServiceGroup,
+			Version:  SnapshotMetadataServiceVersion,
+			Resource: SnapshotMetadataServiceResource,
+		}
+		err := f.DynamicClient.Resource(gvr).Delete(ctx, crName, metav1.DeleteOptions{})
+		if err != nil {
+			framework.Logf("Failed to delete SnapshotMetadataService CR %s: %v", crName, err)
+		}
 	}
 
-	return nil
+	return cleanup, nil
 }

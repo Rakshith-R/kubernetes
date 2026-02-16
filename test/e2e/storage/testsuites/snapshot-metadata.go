@@ -104,7 +104,6 @@ func constructVerifierCommand(
 		command = append(command, fmt.Sprintf("-target-device-path=%s", targetDevicePath))
 	}
 
-	// return command
 	return strings.Join(command, " ")
 }
 
