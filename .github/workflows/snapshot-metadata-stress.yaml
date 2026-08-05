@@ -9,10 +9,16 @@ on:
 jobs:
   e2e-snapshot-metadata-stress:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
+    env:
+      ARTIFACTS: /tmp/e2e-artifacts
+      FOCUS: "snapshot-metadata-stress"
+      SKIP: ""
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -21,73 +27,22 @@ jobs:
           cache: true
 
       - name: Install kind
-        run: |
-          go install sigs.k8s.io/kind@latest
+        run: go install sigs.k8s.io/kind@latest
 
-      - name: Build node image and test binaries
+      - name: Free disk space
         run: |
-          kind build node-image -v 1
-          GINKGO_SRC_DIR="vendor/github.com/onsi/ginkgo/v2/ginkgo"
-          make all WHAT="cmd/kubectl test/e2e/e2e.test ${GINKGO_SRC_DIR}"
-          export PATH="${PWD}/_output/bin:$PATH"
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
+          sudo apt-get clean
+          df -h
 
-      - name: Create kind cluster
+      - name: Run snapshot metadata stress e2e
         run: |
-          cat <<EOF > /tmp/kind-config.yaml
-          kind: Cluster
-          apiVersion: kind.x-k8s.io/v1alpha4
-          nodes:
-          - role: control-plane
-          - role: worker
-          - role: worker
-          EOF
-          kind create cluster \
-            --image=kindest/node:latest \
-            --wait=1m \
-            --config=/tmp/kind-config.yaml
-
-      - name: Install snapshot CRDs and controller
-        env:
-          SNAPSHOTTER_VERSION: v8.4.0
-        run: |
-          export PATH="${PWD}/_output/bin:$PATH"
-          kubectl apply -f ./cluster/addons/volumesnapshots/crd/snapshot.storage.k8s.io_volumesnapshotclasses.yaml
-          kubectl apply -f ./cluster/addons/volumesnapshots/crd/snapshot.storage.k8s.io_volumesnapshotcontents.yaml
-          kubectl apply -f ./cluster/addons/volumesnapshots/crd/snapshot.storage.k8s.io_volumesnapshots.yaml
-          kubectl apply -f test/e2e/testing-manifests/storage-csi/external-snapshot-metadata/cbt.storage.k8s.io_snapshotmetadataservices.yaml
-          kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/refs/tags/${SNAPSHOTTER_VERSION}/deploy/kubernetes/snapshot-controller/rbac-snapshot-controller.yaml
-          curl -s https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/refs/tags/${SNAPSHOTTER_VERSION}/deploy/kubernetes/snapshot-controller/setup-snapshot-controller.yaml | \
-            sed "s|image: registry.k8s.io/sig-storage/snapshot-controller:.*|image: registry.k8s.io/sig-storage/snapshot-controller:${SNAPSHOTTER_VERSION}|" | \
-            kubectl apply -f -
-
-      - name: Run snapshot metadata stress tests
-        env:
-          CSI_PROW_ENABLE_SNAPSHOT_METADATA: "true"
-          KUBERNETES_CONFORMANCE_TEST: "y"
-          KUBE_CONTAINER_RUNTIME: remote
-          KUBE_CONTAINER_RUNTIME_ENDPOINT: unix:///run/containerd/containerd.sock
-          KUBE_CONTAINER_RUNTIME_NAME: containerd
-        run: |
-          export PATH="${PWD}/_output/bin:$PATH"
-          ./hack/ginkgo-e2e.sh \
-            '--provider=skeleton' \
-            '--num-nodes=2' \
-            '--ginkgo.focus=snapshot-metadata-stress' \
-            '--ginkgo.skip=' \
-            '--report-dir=/tmp/e2e-results' \
-            '--disable-log-dump=true'
-
-      - name: Export logs
-        if: always()
-        run: |
-          mkdir -p /tmp/e2e-artifacts
-          kind export logs /tmp/e2e-artifacts || true
+          mkdir -p "${ARTIFACTS}"
+          bash test/e2e/testing-manifests/storage-csi/external-snapshot-metadata/run_snapshot_metadata_e2e.sh
 
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-snapshot-metadata-stress
-          path: |
-            /tmp/e2e-results
-            /tmp/e2e-artifacts
+          path: /tmp/e2e-artifacts
