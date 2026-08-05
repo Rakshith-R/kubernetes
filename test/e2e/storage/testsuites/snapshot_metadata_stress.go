@@ -34,6 +34,7 @@ import (
 	e2epv "k8s.io/kubernetes/test/e2e/framework/pv"
 	e2evolume "k8s.io/kubernetes/test/e2e/framework/volume"
 	storageframework "k8s.io/kubernetes/test/e2e/storage/framework"
+	storageutils "k8s.io/kubernetes/test/e2e/storage/utils"
 	admissionapi "k8s.io/pod-security-admission/api"
 )
 
@@ -136,6 +137,10 @@ func (s *snapshotMetadataStressTestSuite) DefineTests(driver storageframework.Te
 		cs = f.ClientSet
 		config := driver.PrepareTest(ctx, f)
 		driverInfo := driver.GetDriverInfo()
+
+		ginkgo.By("Creating snapshot metadata resources")
+		err := storageutils.CreateSnapshotMetadataResources(ctx, f, driverInfo.Name, config.DriverNamespace.Name)
+		framework.ExpectNoError(err, "Failed to create snapshot metadata resources")
 
 		stressTest = &snapshotMetadataStressTest{
 			config:       config,
@@ -277,6 +282,15 @@ func (s *snapshotMetadataStressTestSuite) DefineTests(driver storageframework.Te
 		wg.Wait()
 
 		framework.ExpectNoError(errors.NewAggregate(errs), "while cleaning up resources")
+
+		// Phase 6: Cleanup snapshot metadata resources
+		if stressTest.config != nil {
+			driverInfo := driver.GetDriverInfo()
+			cleanupErr := storageutils.CleanupSnapshotMetadataResources(ctx, f, driverInfo.Name, stressTest.config.DriverNamespace.Name)
+			if cleanupErr != nil {
+				framework.Logf("Warning: failed to cleanup snapshot metadata resources: %v", cleanupErr)
+			}
+		}
 	}
 
 	f.It("should stress GetMetadataDelta with concurrent pods", f.WithSlow(), f.WithSerial(), func(ctx context.Context) {
