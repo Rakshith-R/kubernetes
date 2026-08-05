@@ -344,6 +344,12 @@ func (s *snapshotMetadataStressTestSuite) DefineTests(driver storageframework.Te
 					stressTest.restoredPVCs = append(stressTest.restoredPVCs, srcPvc, tgtPvc)
 					stressTest.mu.Unlock()
 
+					framework.Logf("Pod-%d, SnapshotPair %d/%d: waiting for restored PVCs to bind", podIndex, j, stressTest.testOptions.NumSnapshotPairs-1)
+					err = e2epv.WaitForPersistentVolumeClaimPhase(ctx, v1.ClaimBound, cs, f.Namespace.Name, srcPvcName, framework.Poll, f.Timeouts.ClaimProvision)
+					framework.ExpectNoError(err, "Failed waiting for source PVC to bind for pod-%d pair-%d", podIndex, j)
+					err = e2epv.WaitForPersistentVolumeClaimPhase(ctx, v1.ClaimBound, cs, f.Namespace.Name, tgtPvcName, framework.Poll, f.Timeouts.ClaimProvision)
+					framework.ExpectNoError(err, "Failed waiting for target PVC to bind for pod-%d pair-%d", podIndex, j)
+
 					backupPod, err := createBackupClientPod(ctx, f, cs, srcPvc, tgtPvc)
 					framework.ExpectNoError(err, "Failed to create backup client pod for pod-%d pair-%d", podIndex, j)
 
@@ -415,6 +421,12 @@ func (s *snapshotMetadataStressTestSuite) DefineTests(driver storageframework.Te
 				stressTest.mu.Lock()
 				stressTest.restoredPVCs = append(stressTest.restoredPVCs, srcPvc, tgtPvc)
 				stressTest.mu.Unlock()
+
+				framework.Logf("Pod-%d: waiting for restored PVCs to bind", podIndex)
+				err = e2epv.WaitForPersistentVolumeClaimPhase(ctx, v1.ClaimBound, cs, f.Namespace.Name, srcPvcName, framework.Poll, f.Timeouts.ClaimProvision)
+				framework.ExpectNoError(err, "Failed waiting for source PVC to bind for pod-%d", podIndex)
+				err = e2epv.WaitForPersistentVolumeClaimPhase(ctx, v1.ClaimBound, cs, f.Namespace.Name, tgtPvcName, framework.Poll, f.Timeouts.ClaimProvision)
+				framework.ExpectNoError(err, "Failed waiting for target PVC to bind for pod-%d", podIndex)
 
 				backupPod, err := createBackupClientPod(ctx, f, cs, srcPvc, tgtPvc)
 				framework.ExpectNoError(err, "Failed to create backup client pod for pod-%d", podIndex)
