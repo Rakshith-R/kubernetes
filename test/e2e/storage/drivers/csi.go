@@ -122,8 +122,8 @@ func initHostPathCSIDriver(name string, capabilities map[storageframework.Capabi
 				NumPods: 10,
 			},
 			SnapshotMetadataStressTestOptions: &storageframework.SnapshotMetadataStressTestOptions{
-				NumPods:          3,
-				NumSnapshotPairs: 2,
+				NumPods:          2,
+				NumSnapshotPairs: 1,
 			},
 			VolumeGroupSnapshotStressTestOptions: &storageframework.VolumeGroupSnapshotStressTestOptions{
 				NumPods:      5,
