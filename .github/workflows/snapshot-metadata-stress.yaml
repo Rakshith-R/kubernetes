@@ -26,8 +26,8 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Install kind
-        run: go install sigs.k8s.io/kind@latest
+      - name: Install kind (from HEAD for latest k8s compat)
+        run: go install sigs.k8s.io/kind@main
 
       - name: Free disk space
         run: |
