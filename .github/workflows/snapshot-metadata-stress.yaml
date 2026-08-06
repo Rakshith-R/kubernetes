@@ -47,7 +47,7 @@ jobs:
       - name: Create kind cluster
         run: |
           mkdir -p "${ARTIFACTS}"
-          printf 'kind: Cluster\napiVersion: kind.x-k8s.io/v1alpha4\nnodes:\n- role: control-plane\n- role: worker\n- role: worker\n' > /tmp/kind-config.yaml
+          printf 'kind: Cluster\napiVersion: kind.x-k8s.io/v1alpha4\nnodes:\n- role: control-plane\n- role: worker\n- role: worker\n- role: worker\n' > /tmp/kind-config.yaml
           kind create cluster \
             --image="${KIND_NODE_IMAGE}" \
             --retain \
@@ -75,7 +75,7 @@ jobs:
         run: |
           ./hack/ginkgo-e2e.sh \
             '--provider=skeleton' \
-            '--num-nodes=2' \
+            '--num-nodes=3' \
             '--ginkgo.focus=snapshot-metadata-stress' \
             '--ginkgo.skip=' \
             "--report-dir=${ARTIFACTS}" \
