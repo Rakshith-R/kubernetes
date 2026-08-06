@@ -38,17 +38,23 @@ jobs:
           make all WHAT="cmd/kubectl test/e2e/e2e.test vendor/github.com/onsi/ginkgo/v2/ginkgo"
           echo "${PWD}/_output/bin" >> "$GITHUB_PATH"
 
+      - name: Increase loop devices
+        run: |
+          sudo modprobe loop max_loop=64 || true
+          for i in $(seq 0 63); do sudo mknod -m 0660 /dev/loop$i b 7 $i 2>/dev/null || true; done
+          ls /dev/loop* | wc -l
+
       - name: Create kind cluster
         run: |
           mkdir -p "${ARTIFACTS}"
           cat <<'EOF' > /tmp/kind-config.yaml
-          kind: Cluster
-          apiVersion: kind.x-k8s.io/v1alpha4
-          nodes:
-          - role: control-plane
-          - role: worker
-          - role: worker
-          EOF
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+- role: worker
+- role: worker
+EOF
           kind create cluster \
             --image="${KIND_NODE_IMAGE}" \
             --retain \
